@@ -34,3 +34,6 @@ _pycache__/
 
 models
 myenv
+env
+__pycache__/
+myenv/
