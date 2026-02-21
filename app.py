@@ -1,6 +1,5 @@
 import streamlit as st
 import os
-import shutil
 import uuid
 
 from core.dicom_to_nrrd import convert_dicom_to_nrrd
@@ -8,9 +7,7 @@ from core.segment import run_segmentation
 from core.metrics import run_metrics
 from core.visualize import show_slices
 from core.export import save_medical_volumes, save_preview_image, save_excel
-
-# ✅ ADD THIS
-from core.gender_prediction import predict_gender
+from core.gender_prediction import predict_gender_from_volume
 
 
 # ================= STATE INIT =================
@@ -29,19 +26,13 @@ if "right" not in st.session_state:
 if "analysis_done" not in st.session_state:
     st.session_state.analysis_done = False
 
-# ✅ ADD THESE
 if "gender" not in st.session_state:
     st.session_state.gender = None
-
-if "gender_prob" not in st.session_state:
-    st.session_state.gender_prob = None
 
 
 st.set_page_config(layout="wide")
 st.title("🦷 CBCT Sinus AI Analyzer")
 
-
-# ================= INPUT TYPE =================
 mode = st.radio("Select Input Type", ["Upload DICOM Folder", "Upload NRRD File"])
 
 os.makedirs("temp", exist_ok=True)
@@ -70,6 +61,10 @@ if mode == "Upload DICOM Folder":
             with st.spinner("Converting DICOM → NRRD..."):
                 st.session_state.nrrd_path = convert_dicom_to_nrrd(dicom_folder, case_folder)
 
+            if not st.session_state.nrrd_path:
+                st.error("DICOM conversion failed.")
+                st.stop()
+
             seg_out = os.path.join(case_folder, "seg.seg.nrrd")
 
             with st.spinner("Running 3D AI Segmentation..."):
@@ -78,19 +73,21 @@ if mode == "Upload DICOM Folder":
             with st.spinner("Calculating Sinus Metrics..."):
                 st.session_state.left, st.session_state.right = run_metrics(st.session_state.seg_path)
 
-            # ✅ ADD GENDER PREDICTION
-            measurements = {}
-            if st.session_state.left:
-                measurements["Left"] = st.session_state.left
-            if st.session_state.right:
-                measurements["Right"] = st.session_state.right
+            # ---------- RULE-BASED GENDER ----------
+            total_volume = 0
 
-            gender, prob = predict_gender(measurements)
-            st.session_state.gender = gender
-            st.session_state.gender_prob = prob
+            if st.session_state.left:
+                total_volume += st.session_state.left[0]
+
+            if st.session_state.right:
+                total_volume += st.session_state.right[0]
+
+            if total_volume > 0:
+                st.session_state.gender = predict_gender_from_volume(total_volume)
+            else:
+                st.session_state.gender = None
 
             st.session_state.analysis_done = True
-            st.cache_data.clear()
             st.success("Analysis Complete")
 
 
@@ -123,19 +120,21 @@ else:
             with st.spinner("Calculating Sinus Metrics..."):
                 st.session_state.left, st.session_state.right = run_metrics(st.session_state.seg_path)
 
-            # ✅ ADD GENDER PREDICTION
-            measurements = {}
-            if st.session_state.left:
-                measurements["Left"] = st.session_state.left
-            if st.session_state.right:
-                measurements["Right"] = st.session_state.right
+            # ---------- RULE-BASED GENDER ----------
+            total_volume = 0
 
-            gender, prob = predict_gender(measurements)
-            st.session_state.gender = gender
-            st.session_state.gender_prob = prob
+            if st.session_state.left:
+                total_volume += st.session_state.left[0]
+
+            if st.session_state.right:
+                total_volume += st.session_state.right[0]
+
+            if total_volume > 0:
+                st.session_state.gender = predict_gender_from_volume(total_volume)
+            else:
+                st.session_state.gender = None
 
             st.session_state.analysis_done = True
-            st.cache_data.clear()
             st.success("Analysis Complete")
 
 
@@ -159,22 +158,16 @@ if st.session_state.analysis_done:
         st.subheader("RIGHT SINUS")
         st.write(right)
 
-    # ✅ ADD GENDER DISPLAY
     st.header("🧬 Gender Prediction")
 
     if st.session_state.gender:
         st.success(f"Predicted Gender: {st.session_state.gender}")
-        st.info(f"Confidence: {st.session_state.gender_prob:.2f}")
     else:
-        st.warning("Gender could not be predicted (Volume < 2000 mm³).")
+        st.warning("Gender could not be predicted.")
 
-    st.caption("Scroll mouse wheel or slider to view slices")
-
-    # ---------- VISUALIZATION ----------
     st.header("🧠 Visualization")
     show_slices(nrrd_path, seg_path)
 
-    # ---------- EXPORT ----------
     st.header("💾 Saving Patient Report")
 
     patient_folder = os.path.join(
@@ -186,16 +179,12 @@ if st.session_state.analysis_done:
     save_medical_volumes(nrrd_path, seg_path, patient_folder)
     save_preview_image(nrrd_path, seg_path, patient_folder)
 
-    # ✅ PASS GENDER INTO EXCEL
     excel_path = save_excel(
         left,
         right,
         st.session_state.gender,
-        st.session_state.gender_prob,
         patient_folder
     )
-
-    st.success("Results saved successfully")
 
     with open(excel_path, "rb") as f:
         st.download_button("📥 Download Excel Report", f, file_name="measurements.xlsx")

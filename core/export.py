@@ -46,20 +46,18 @@ def save_preview_image(nrrd_path, seg_path, output_folder):
     return preview_path
 
 
-# ================= SAVE EXCEL =================
-def save_excel(left_metrics, right_metrics, gender, confidence, output_folder):
+def save_excel(left_metrics, right_metrics, gender, output_folder):
 
     data = {
         "Parameter": [
             "Left Volume", "Left Length", "Left Breadth", "Left Height",
             "Right Volume", "Right Length", "Right Breadth", "Right Height",
-            "Predicted Gender", "Confidence"
+            "Predicted Gender"
         ],
         "Value": [
             *(left_metrics if left_metrics else [None]*4),
             *(right_metrics if right_metrics else [None]*4),
-            gender,
-            confidence
+            gender
         ]
     }
 
