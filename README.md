@@ -1,4 +1,4 @@
-# 🦷 CBCT Sinus AI Analyzer
+Gender Prediction Using Maxillary Sinus Volume from CBCT Scans
 
 A Streamlit web application that processes CBCT (Cone Beam Computed Tomography) scans of the maxillofacial region, segments the maxillary sinuses using a 3D AI model, calculates sinus volumes and anatomical measurements, and predicts gender based on sinus volume — an approach explored in forensic and anthropological research.
 
